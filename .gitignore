@@ -1,0 +1,12 @@
+.env
+
+.venv
+
+# Ignore Python bytecode directories
+__pycache__/
+
+#External Data 
+IdiomDataset/
+
+#extracted idioms
+semantic_chunks.jsonl

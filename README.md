@@ -6,7 +6,7 @@ The core architecture is a multi-node **LangGraph state-machine structure** with
 
 ---
 
-## 🛠️ Tech Stack
+## Tech Stack
 
 Agent Framework: LangGraph, LangChain, LangChain Postgres
 

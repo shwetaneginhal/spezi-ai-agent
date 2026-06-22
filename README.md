@@ -1,4 +1,4 @@
-# Spezi: ## a friendly, local German language teaching AI Agent ##
+# Spezi: a friendly, local German language teaching AI Agent 
 
 The goal of Sepzi is to help an English speaker learn how to talk like a true German local.  This is built using a **local deployment topology**. Spezi is available offline with unlimited usage and optimization and control.
 
@@ -8,13 +8,13 @@ The core architecture is a multi-node **LangGraph state-machine structure** with
 
 ## Tech Stack
 
-Agent Framework: LangGraph, LangChain, LangChain Postgres
+**Agent Framework:** LangGraph, LangChain, LangChain Postgres
 
-Foundational Models: Llama 3.2 & BGE-M3 (Multilingual Embedding Engine)
+**Foundational Models:** Llama 3.2 & BGE-M3 (Multilingual Embedding Engine)
 
-Database & Vector Layer: PostgreSQL 16 + pgvector (Dockerized)
+**Database & Vector Layer:** PostgreSQL 16 + pgvector (Dockerized)
 
-Database Driver System: psycopg3 (thread-safe ConnectionPool with dynamic dict_row factories and explicit transaction autocommit mechanics)
+**Database Driver System:** psycopg3 (thread-safe ConnectionPool with dynamic dict_row factories and explicit transaction autocommit mechanics)
 
 
 ## Architecture and Core Features
@@ -68,7 +68,8 @@ Example :-
 Dataset: German Umgangssprache
 Target Idiom (Base Form): neu maßstab setzen
 English Meaning: to create a milestone
-German Contextual Example: Dank unseres Engagements setzen wir immer wieder neue Maßstäbe in der Automatisierungs- und Antriebstechnik.English Translation: Thanks to our commitment , we continue to set new standards in automation and drive technology.
+German Contextual Example: Dank unseres Engagements setzen wir immer wieder neue Maßstäbe in der Automatisierungs- und Antriebstechnik.
+English Translation: Thanks to our commitment , we continue to set new standards in automation and drive technology.
 ```
 
 #### Embedding Model - BGE-M3 (a multilingual model)

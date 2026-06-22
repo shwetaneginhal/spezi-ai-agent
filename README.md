@@ -1,6 +1,6 @@
-# Spezi: a friendly local German language teaching Agent
+# Spezi: ## a friendly, local German language teaching AI Agent ##
 
-Spezi is an AI agent built to act as an interactive German language tutor. This is built using a **100% local deployment topology**. Spezi guarantees absolute data privacy, data security, offline availability, low latency, unlimited usage and optimization and control.
+The goal of Sepzi is to help an English speaker learn how to talk like a true German local.  This is built using a **local deployment topology**. Spezi is available offline with unlimited usage and optimization and control.
 
 The core architecture is a multi-node **LangGraph state-machine structure** with a **Hybrid search RAG Pipeline** (Sparse Keyword + Dense Semantic Search) using a unified database. Spezi has a **persistence memory** (sliding-window compactor) for each user, allowing for long conversations that can be picked up at any time.
 
@@ -15,6 +15,7 @@ Foundational Models: Llama 3.2 & BGE-M3 (Multilingual Embedding Engine)
 Database & Vector Layer: PostgreSQL 16 + pgvector (Dockerized)
 
 Database Driver System: psycopg3 (thread-safe ConnectionPool with dynamic dict_row factories and explicit transaction autocommit mechanics)
+
 
 ## Architecture and Core Features
 
@@ -74,7 +75,16 @@ German Contextual Example: Dank unseres Engagements setzen wir immer wieder neue
 
 BAAI **BGE-M3** is the open-source model for multilingual tasks. It is trained on over 100 languages and natively understands German nuances. It is a Hybrid Retrieval model. In a single forward pass, it can generate Dense vectors (for semantic meaning), Sparse vectors (for keyword matching) and multi-vector (for analyzing token-token interaction) outputs. 
 
-In **Hybrid search**, because keyword matches and semantic meaning use completely different scoring methods, their results cannot be compared directly.  To fix this, **Reciprocal Rank Fusion (RRF)** is used here. RRF looks at how high a document ranks in both lists, safely merges and normalizes these results into a single, highly accurate list.s
+In **Hybrid search**, because keyword matches and semantic meaning use completely different scoring methods, their results cannot be compared directly.  To fix this, **Reciprocal Rank Fusion (RRF)** is used here. RRF looks at how high a document ranks in both lists, safely merges and normalizes these results into a single, highly accurate list.
+
+## 🗺️ Roadmap
+
+- [x] Prompt Engineering
+- [x] Adding Memory (Context Retention)
+- [x] Implementing RAG
+- [ ] **[Upcoming]** Evaluation
+- [ ] **[Upcoming]** API Deployment and UI
+
 
 
 

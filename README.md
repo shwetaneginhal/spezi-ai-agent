@@ -2,7 +2,7 @@
 
 The goal of Sepzi is to help an English speaker learn how to talk like a true German local.  This is built using a **local deployment topology**. Spezi is available offline with unlimited usage and optimization and control.
 
-The core architecture is a multi-node **LangGraph state-machine structure** with a **Hybrid search RAG Pipeline** (Sparse Keyword + Dense Semantic Search) using a unified database. Spezi has a **persistence memory** (sliding-window compactor) for each user, allowing for long conversations that can be picked up at any time.
+The core architecture is a multi-node **LangGraph state-machine structure** with a **Hybrid search Router RAG Pipeline** (Sparse Keyword + Dense Semantic Search) using a unified database. Spezi has a **persistence memory** (sliding-window compactor) for each user, allowing for long conversations that can be picked up at any time. 
 
 ---
 
@@ -26,28 +26,29 @@ To keep the architecture simple and avoid managing multiple databases, this proj
 * Vector Search: Handles semantic text search directly within Postgres using the pgvector extension.
 
 ### 2. Agent Workflow (LangGraph)
-Built on LangGraph, the agent operates as a cyclic graph with specialized processing nodes. This structure guarantees predictable state transitions and precise control over conversation history.
+Built on LangGraph, the agent operates as a cyclic graph with processing nodes. This structure guarantees predictable state transitions and precise control over conversation history and tool calling. Instead of forcing database hits on every turn, the graph utilizes conditional routing edges.
 
 ```text
        [ User Input ]
              │
              ▼
     ┌─────────────────┐
-    │  1. Compactor   │ ──► Triggers summary & drops rows if messages > 6
+    │  1. Compactor   │ ──► Progressively cleans & summarizes dialogue
     └─────────────────┘
              │
              ▼
-    ┌─────────────────┐
-    │  2. Retriever   │ ──► Executes Sparse + Dense Hybrid Search (BGE-M3)
-    └─────────────────┘
+    ┌─────────────────┐ ◄──────────────────────────────┐
+    │  2. Spezi LLM   │                                │
+    └─────────────────┘                                │
+             │                                         │
+             ▼                                         │ (Loop back with data)
+     [tools_condition]                                 │
+             │                                         │
+             ├───(Yes, Idiom query) ──────► ┌───────────────────┐
+             │                              │   3. ToolNode     │
+             │                              └───────────────────┘
              │
-             ▼
-    ┌─────────────────┐
-    │  3. Spezi LLM   │ ──► Grounded generation via Llama 3.2 on GPU
-    └─────────────────┘
-             │
-             ▼
-          [ END ]
+             └───(No, regular chat & Spezi replies)───────► [ END ]
 
 ```
 
@@ -81,8 +82,8 @@ In **Hybrid search**, because keyword matches and semantic meaning use completel
 ## 🗺️ Roadmap
 
 - [x] Prompt Engineering
-- [x] Adding Memory (Context Retention)
-- [x] Implementing RAG
+- [x] Adding Persistent Memory (context retention)
+- [x] Implementing Router RAG with Tool calling
 - [ ] **[Upcoming]** Evaluation
 - [ ] **[Upcoming]** API Deployment and UI
 

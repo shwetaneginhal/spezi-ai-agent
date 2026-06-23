@@ -9,6 +9,8 @@ from langgraph.graph import START, END, StateGraph, MessagesState
 from langgraph.checkpoint.postgres import PostgresSaver
 from prompts import SPEZI_SYSTEM_PROMPT
 from langchain_postgres import PGEngine, PGVectorStore
+from langchain_core.tools import tool
+from langgraph.prebuilt import ToolNode, tools_condition
 
 from langchain_postgres import PGEngine, PGVectorStore
 try:
@@ -29,7 +31,7 @@ pool = ConnectionPool(
 )
 
 
-print("🧠 Connecting Spezi to the Hybrid Vector Knowledge Base...")
+#print("🧠 Connecting Spezi to the Hybrid Vector Knowledge Base...")
 
 DB_URI = "postgresql+psycopg://spezi_admin:spezi_pass@localhost:5432/spezi_db"
 engine = PGEngine.from_connection_string(DB_URI)
@@ -45,22 +47,53 @@ vector_store = PGVectorStore.create_sync(
     )
 )
 
+# 2. Define the Tool 
+# The docstring here is CRITICAL. Llama 3.2 reads this to decide WHEN to use the tool.
+@tool
+def search_german_idioms(query: str) -> str:
+    """Searches the local database ONLY for specific German idioms, colloquial slang phrases, or cultural expressions.
+    
+    CRITICAL GUARDRAILS:
+    - DO NOT use this tool for general chat, general translations.
+    - DO NOT use this tool when asked to explain German grammar.
+    - DO NOT use this tool for meta-questions about the conversation history (e.g., 'do you remember me?', 'what did we talk about?').
+    - Only invoke this tool when the user explicitly asks to translate, explain, or find a German or English idiom.
+    """
+    
+    #print(f"\n⚙️ [Agent Decision] Spezi decided to search DB for: '{query}'")
+    retrieved_docs = vector_store.similarity_search(query, k=2)
+    #print(retrieved_docs)
+    
+    if not retrieved_docs:
+        #print("\n No matches retreived")
+        return "No matching idiom found in database."
+    
+        
+    return "\n---\n".join([doc.page_content for doc in retrieved_docs])
+
+
 # Initialize the LLM
 llm = ChatOllama(
     model="llama3.2", 
-    temperature=0.6,
+    temperature=0.1,
     validate_model_on_init=True,
     num_gpu=-1
 )
 
+# Bind the tool to the LLM so it knows it exists
+tools = [search_german_idioms]
+llm_with_tools = llm.bind_tools(tools)
+
 # We inject {rag_context} so Spezi can read the database results
 prompt_template = ChatPromptTemplate.from_messages([
-    ("system", SPEZI_SYSTEM_PROMPT + "\n\n📚 RELEVANT GERMAN IDIOM DATA TO GUIDE (If applicable):\n{rag_context}"),
+    ("system", SPEZI_SYSTEM_PROMPT),
     MessagesPlaceholder(variable_name="messages"),
 ])
 
+'''
 class TutorState(MessagesState):
     rag_context: str
+    '''
 
 
 # Node 1: The Auto-Compactor (Database Pruning Node)
@@ -103,8 +136,9 @@ def compact_history_node(state: MessagesState):
         "messages": delete_old_rows + [SystemMessage(content=summary_text)] 
     }
 
+'''
 # Node 2 - Hybrid Retriever
-def hybrid_retrieval_node(state: TutorState):
+def hybrid_retrieval_node(state: MessagesState):
     # Grab the user's most recent message
     latest_user_message = state["messages"][-1].content
     print(f"\n🔍 [Hybrid Search] Querying pgvector for: '{latest_user_message}'...")
@@ -121,34 +155,39 @@ def hybrid_retrieval_node(state: TutorState):
     
     # Save the string into our Custom State
     return {"rag_context": context_str}
-
+'''
 
 # Node 3: Execute chat logic
-def call_spezi_model(state: TutorState):
+def call_spezi_model(state: MessagesState):
     # Safely get the context (defaults to empty if the retriever found nothing)
-    rag_context = state.get("rag_context", "No idiom reference available.")
+    #rag_context = state.get("rag_context", "No idiom reference available.")
     
     filled_prompt = prompt_template.invoke({
         "messages": state["messages"],
-        "rag_context": rag_context
+       # "rag_context": rag_context
     })
-    response = llm.invoke(filled_prompt)
+    response = llm_with_tools.invoke(filled_prompt)
     return {"messages": [response]}
 
 
 # 3. Build the LangGraph State Machine
-workflow = StateGraph(TutorState)
+workflow = StateGraph(MessagesState)
 
 # Add operational blocks
 workflow.add_node("compactor", compact_history_node)
-workflow.add_node("retriever", hybrid_retrieval_node)
+#workflow.add_node("retriever", hybrid_retrieval_node)
 workflow.add_node("spezi", call_spezi_model)
+workflow.add_node("tools", ToolNode(tools))
 
 # FIX: Set the clean structural routing path
 workflow.add_edge(START, "compactor")   # 1. Clean the database history first
-workflow.add_edge("compactor", "retriever") # 2.RAG search
-workflow.add_edge("retriever", "spezi")     # give all info to Sepzi 
-workflow.add_edge("spezi", END)         # 3. Return Spezi's voice as the final output
+workflow.add_edge("compactor", "spezi") # 2. call LLM
+       
+# Spezi decides: Does he need a tool, or should he just talk to the user?
+workflow.add_conditional_edges("spezi", tools_condition)
+
+# If he used a tool, feed the database results back to his brain to generate the final answer
+workflow.add_edge("tools", "spezi")
 
 # 4. Global Checkpointer Setup
 with pool.connection() as conn:

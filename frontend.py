@@ -10,14 +10,14 @@ st.title("🥤 Spezi is cold, carbonated, and live!")
 st.subheader("Chat with your German Local buddy")
 
 if "user_id" not in st.session_state:
-    st.session_state.user_id = "test_user_1"
+    st.session_state.user_id = "default_user"
 
 if "messages" not in st.session_state:
     st.session_state.messages = []
 
 with st.sidebar:
-    st.header("Settings")
-    user_id_input = st.text_input("User ID (Thread Session):", value=st.session_state.user_id)
+    st.header("Please enter your Username here for personalized chats")
+    user_id_input = st.text_input("Username (e.g., Fanta):", value=st.session_state.user_id)
     if user_id_input != st.session_state.user_id:
         st.session_state.user_id = user_id_input
         st.session_state.messages = []

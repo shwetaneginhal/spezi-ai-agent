@@ -1,8 +1,10 @@
-# agent_core.py
+import os
+from dotenv import load_dotenv
+load_dotenv()
+
 import psycopg
-from psycopg.rows import dict_row  # Crucial for dictionary row mapping
+from psycopg.rows import dict_row
 from psycopg_pool import ConnectionPool
-from langchain_ollama import ChatOllama, OllamaEmbeddings
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 from langchain_core.messages import SystemMessage, RemoveMessage
 from langgraph.graph import START, END, StateGraph, MessagesState
@@ -10,9 +12,10 @@ from langgraph.checkpoint.postgres import PostgresSaver
 from prompts import SPEZI_SYSTEM_PROMPT
 from langchain_postgres import PGEngine, PGVectorStore
 from langchain_core.tools import tool
-from langgraph.prebuilt import ToolNode, tools_condition
 
-from langchain_postgres import PGEngine, PGVectorStore
+from langchain_groq import ChatGroq
+from langchain_huggingface import HuggingFaceEmbeddings
+
 try:
     from langchain_postgres.v2.hybrid_search_config import HybridSearchConfig, reciprocal_rank_fusion
 except ModuleNotFoundError:
@@ -21,21 +24,36 @@ except ModuleNotFoundError:
     except ModuleNotFoundError:
         from langchain_postgres import HybridSearchConfig, reciprocal_rank_fusion
 
-# DB Connection Configuration (Fixed with production pool properties)
-DB_POOL_URI = "postgresql://spezi_admin:spezi_pass@localhost:5432/spezi_db"
+# Cloud Database Configuration (Neon)
+# Grab the Neon connection string from environment variables
+NEON_URI = os.getenv("NEON_DB_URI")
+if not NEON_URI:
+    raise ValueError("NEON_DB_URI environment variable is missing!")
+
+# LangChain's PGEngine requires the sqlalchemy prefix
+DB_URI = NEON_URI.replace("postgresql://", "postgresql+psycopg://")
+# The connection pool uses the standard prefix
+DB_POOL_URI = NEON_URI
 
 pool = ConnectionPool(
     conninfo=DB_POOL_URI, 
     max_size=10,
-    kwargs={"autocommit": True, "row_factory": dict_row} # Crucial fix for LangGraph checkpointers
+    kwargs={"autocommit": True, "row_factory": dict_row} 
 )
 
-
 #print("🧠 Connecting Spezi to the Hybrid Vector Knowledge Base...")
-
-DB_URI = "postgresql+psycopg://spezi_admin:spezi_pass@localhost:5432/spezi_db"
 engine = PGEngine.from_connection_string(DB_URI)
-embeddings = OllamaEmbeddings(model="bge-m3")
+
+# Uses the Hugging Face API for embeddings 
+print("🧠 Connecting to Hugging Face Embeddings...")
+embeddings = HuggingFaceEmbeddings(model_name="BAAI/bge-m3")
+
+"""
+engine.init_vectorstore_table(
+    table_name="spezi_idiom_knowledge",
+    vector_size=1024,
+)
+"""
 
 vector_store = PGVectorStore.create_sync(
     engine=engine,
@@ -47,57 +65,44 @@ vector_store = PGVectorStore.create_sync(
     )
 )
 
-# 2. Define the Tool 
+# Custom graph state
+class AgentState(MessagesState):
+    rag_context: str  # Safely passes retrieved DB context to synthesis without polluting message history
+
+# Define the Tool 
 # The docstring here is CRITICAL. Llama 3.2 reads this to decide WHEN to use the tool.
 @tool
 def search_german_idioms(query: str) -> str:
-    """Searches the local database ONLY for specific German idioms, colloquial slang phrases, or cultural expressions.
+    """Searches the local database ONLY for specific German idioms or colloquial expressions.
     
     CRITICAL GUARDRAILS:
-    - DO NOT use this tool for general chat, general translations.
+    - DO NOT call this tool for greetings (e.g., 'Hi', 'Hello', 'Guten Tag', 'How are you').
+    - DO NOT use this tool for general conversations, small talk or general translations.
     - DO NOT use this tool when asked to explain German grammar.
-    - DO NOT use this tool for meta-questions about the conversation history (e.g., 'do you remember me?', 'what did we talk about?').
-    - Only invoke this tool when the user explicitly asks to translate, explain, or find a German or English idiom.
+    - DO NOT use this tool for memory checks or about the conversation history (e.g., 'do you remember me?', 'what did we talk about?').
+    - Only invoke this tool when the user explicitly asks to translate, explain, or find a specific German or English idiom.
     """
-    
-    #print(f"\n⚙️ [Agent Decision] Spezi decided to search DB for: '{query}'")
-    retrieved_docs = vector_store.similarity_search(query, k=2)
-    #print(retrieved_docs)
-    
-    if not retrieved_docs:
-        #print("\n No matches retreived")
-        return "No matching idiom found in database."
-    
-        
-    return "\n---\n".join([doc.page_content for doc in retrieved_docs])
+    pass
 
 
 # Initialize the LLM
-llm = ChatOllama(
-    model="llama3.2", 
-    temperature=0.1,
-    validate_model_on_init=True,
-    num_gpu=-1
+# Instance A: Clean model without tools attached
+print("🚀 Connecting to Groq Cloud LLM...")
+llm_no_tool = ChatGroq(
+    model="llama-3.3-70b-versatile", # for multilingual and sending syntax correct prompt for tool calling
+    temperature=0.3,
 )
 
-# Bind the tool to the LLM so it knows it exists
-tools = [search_german_idioms]
-llm_with_tools = llm.bind_tools(tools)
+llm_with_tool = llm_no_tool.bind_tools([search_german_idioms])
 
-# We inject {rag_context} so Spezi can read the database results
-prompt_template = ChatPromptTemplate.from_messages([
-    ("system", SPEZI_SYSTEM_PROMPT),
-    MessagesPlaceholder(variable_name="messages"),
-])
-
-'''
-class TutorState(MessagesState):
-    rag_context: str
-    '''
+# Instance B: Decision model with tools bound
+llm_with_tool = llm_no_tool.bind_tools([search_german_idioms])
 
 
-# Node 1: The Auto-Compactor (Database Pruning Node)
-def compact_history_node(state: MessagesState):
+#Node FUNCTIONS
+
+def compact_history_node(state:AgentState):
+    # Prunes chat history if it grows too long, preserving context via a summary.
     messages = state["messages"]
     
     # Prune history if it exceeds 6 messages (3 turns)
@@ -111,7 +116,7 @@ def compact_history_node(state: MessagesState):
     
     summary_prompt = (
         "Progressively summarize the following conversation between a human and an AI agent named Spezi. "
-        "Keep the summary concise and capture user's personal information, slang and core goals."
+        "Keep the summary concise and capture user's personal information, preferences and core goals."
         "Remember the instructions given by the user."
         "Do not include any pleasantries:\n\n"
     )
@@ -123,7 +128,7 @@ def compact_history_node(state: MessagesState):
         else:
             summary_prompt += f"{msg.type.upper()}: {msg.content}\n"
 
-    summary_response = llm.invoke(summary_prompt)
+    summary_response = llm_no_tool.invoke(summary_prompt)
     summary_text = f"Summary of earlier conversation: {summary_response.content}"
     
     # print(f"✅ Generated Summary: '{summary_response.content[:50]}...'")
@@ -136,75 +141,121 @@ def compact_history_node(state: MessagesState):
         "messages": delete_old_rows + [SystemMessage(content=summary_text)] 
     }
 
-'''
-# Node 2 - Hybrid Retriever
-def hybrid_retrieval_node(state: MessagesState):
-    # Grab the user's most recent message
-    latest_user_message = state["messages"][-1].content
-    print(f"\n🔍 [Hybrid Search] Querying pgvector for: '{latest_user_message}'...")
-    
-    # Execute the Hybrid Search (BGE-M3 Semantic + Postgres Lexical)
-    retrieved_docs = vector_store.similarity_search(latest_user_message, k=2)
-    
-    if not retrieved_docs:
-        return {"rag_context": "No matching idiom found. Rely on your general knowledge."}
-        
-    # Compile the retrieved documents into a clean string for Spezi to read
-    context_str = "\n---\n".join([doc.page_content for doc in retrieved_docs])
-    print(f"✅ Retrieved {len(retrieved_docs)} matching idiom reference(s)!")
-    
-    # Save the string into our Custom State
-    return {"rag_context": context_str}
-'''
 
-# Node 3: Execute chat logic
-def call_spezi_model(state: MessagesState):
-    # Safely get the context (defaults to empty if the retriever found nothing)
-    #rag_context = state.get("rag_context", "No idiom reference available.")
-    
-    filled_prompt = prompt_template.invoke({
-        "messages": state["messages"],
-       # "rag_context": rag_context
-    })
-    response = llm_with_tools.invoke(filled_prompt)
+def decision_node(state: AgentState):
+    """Node 1: Evaluates user input and determines if a tool call is required."""
+    prompt = ChatPromptTemplate.from_messages([
+        ("system", SPEZI_SYSTEM_PROMPT),
+        MessagesPlaceholder(variable_name="messages"),
+    ])
+    filled_prompt = prompt.invoke({"messages": state["messages"]})
+    response = llm_with_tool.invoke(filled_prompt)
     return {"messages": [response]}
 
 
-# 3. Build the LangGraph State Machine
-workflow = StateGraph(MessagesState)
+def db_lookup_node(state: AgentState):
+    """Node 2: Executes hybrid pgvector search and purges the tool call message from history."""
+    last_msg = state["messages"][-1]
+    
+    # Extract search query generated by decision node
+    tool_call = last_msg.tool_calls[0]
+    query = tool_call["args"].get("query", "")
+    
+    print(f"\n⚙️ [Database Search] Querying pgvector for idiom: '{query}'")
+    retrieved_docs = vector_store.similarity_search(query, k=2)
+    
+    if not retrieved_docs:
+        context_str = "No matching idiom found in database. Answer using general knowledge."
+    else:
+        context_str = "\n---\n".join([doc.page_content for doc in retrieved_docs])
+        
+    # Purge the tool_call AIMessage to prevent raw syntax pollution in PostgreSQL state
+    return {
+        "messages": [RemoveMessage(id=last_msg.id)], 
+        "rag_context": context_str
+    }
+
+
+def synthesis_node(state: AgentState):
+    """Node 3: Formulates final user response using clean LLM instance."""
+    rag_context = state.get("rag_context", "")
+    
+    if rag_context:
+        dynamic_system = (
+            f"{SPEZI_SYSTEM_PROMPT}\n\n"
+            f"[DATABASE KNOWLEDGE RETRIEVED]:\n{rag_context}\n"
+            f"INSTRUCTION: Use the retrieved database knowledge above to answer the user's question accurately."
+        )
+    else:
+        dynamic_system = SPEZI_SYSTEM_PROMPT
+        
+    prompt = ChatPromptTemplate.from_messages([
+        ("system", dynamic_system),
+        MessagesPlaceholder(variable_name="messages"),
+    ])
+    
+    filled_prompt = prompt.invoke({"messages": state["messages"]})
+    
+    # Executed via llm_no_tool: direct answer output
+    response = llm_no_tool.invoke(filled_prompt)
+    
+    # Clear rag_context state variable for the next turn
+    return {"messages": [response], "rag_context": ""}
+
+
+# Routing Condition
+def route_decision(state: AgentState):
+    last_msg = state["messages"][-1]
+    if hasattr(last_msg, "tool_calls") and len(last_msg.tool_calls) > 0:
+        return "db_lookup"
+    return END
+
+
+#  Build the LangGraph State Machine
+workflow = StateGraph(AgentState)
 
 # Add operational blocks
 workflow.add_node("compactor", compact_history_node)
-#workflow.add_node("retriever", hybrid_retrieval_node)
-workflow.add_node("spezi", call_spezi_model)
-workflow.add_node("tools", ToolNode(tools))
+workflow.add_node("decision", decision_node)
+workflow.add_node("db_lookup", db_lookup_node)
+workflow.add_node("synthesis", synthesis_node)
+
 
 # FIX: Set the clean structural routing path
 workflow.add_edge(START, "compactor")   # 1. Clean the database history first
-workflow.add_edge("compactor", "spezi") # 2. call LLM
+workflow.add_edge("compactor", "decision") 
        
-# Spezi decides: Does he need a tool, or should he just talk to the user?
-workflow.add_conditional_edges("spezi", tools_condition)
+# Spezi decides: Does he need a tool, or should he just talk to the user with llm_no_tool?
+workflow.add_conditional_edges("decision", route_decision)
 
-# If he used a tool, feed the database results back to his brain to generate the final answer
-workflow.add_edge("tools", "spezi")
+#Linear Forward path
+workflow.add_edge("db_lookup", "synthesis")
+workflow.add_edge("synthesis",END)
 
 # 4. Global Checkpointer Setup
+"""
 with pool.connection() as conn:
     checkpointer = PostgresSaver(conn)
     checkpointer.setup()
+    """
+
+checkpointer_conn = psycopg.connect(DB_POOL_URI, autocommit=True, row_factory=dict_row)
+checkpointer = PostgresSaver(checkpointer_conn)
+checkpointer.setup()
 
 spezi_app = workflow.compile(checkpointer=checkpointer)
 
 def run_spezi():
     print("\n 🥤 Spezi is cold, carbonated, and live! Type 'exit' to end the chat.")
     print("-" * 50)
-    user_id = input("\n Enter User ID (e.g., test_user): ").strip()
+    user_id = input("\n Enter User ID (e.g., Fanta): ").strip()
     if not user_id:
         user_id = "default_user"
         
     print(f"\n--- Chat session initialized for: {user_id} ---")
-    config = {"configurable": {"thread_id": user_id}}
+    config = {
+                "configurable": {"thread_id": user_id},
+            }
     
     while True:
         try:
@@ -217,6 +268,7 @@ def run_spezi():
                 continue
 
             input_data = {"messages": [("user", user_in)]}
+            
             output = spezi_app.invoke(input_data, config=config)
             
             latest_reply = output["messages"][-1].content
@@ -230,3 +282,18 @@ def run_spezi():
 
 if __name__ == "__main__":
     run_spezi()
+
+
+
+def ask_spezi(user_id: str, message: str) -> str:
+    """Executes a single conversational turn for a given user thread."""
+    config = {
+        "configurable": {"thread_id": user_id},
+        "recursion_limit": 6
+    }
+    input_data = {"messages": [("user", message)]}
+    
+    output = spezi_app.invoke(input_data, config=config)
+    
+    # Return the latest assistant response
+    return output["messages"][-1].content

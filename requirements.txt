@@ -11,3 +11,4 @@ langchain-postgres
 pydantic
 langchain-groq
 langchain-huggingface
+langgraph.checkpoint.postgres

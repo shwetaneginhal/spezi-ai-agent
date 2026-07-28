@@ -12,4 +12,3 @@ pydantic
 langchain-groq
 langchain-huggingface
 langgraph.checkpoint.postgres
-sentence-transformers

@@ -14,7 +14,7 @@ from langchain_postgres import PGEngine, PGVectorStore
 from langchain_core.tools import tool
 
 from langchain_groq import ChatGroq
-from langchain_huggingface import HuggingFaceEmbeddings
+from langchain_huggingface import HuggingFaceEndpointEmbeddings
 
 try:
     from langchain_postgres.v2.hybrid_search_config import HybridSearchConfig, reciprocal_rank_fusion
@@ -46,7 +46,7 @@ engine = PGEngine.from_connection_string(DB_URI)
 
 # Uses the Hugging Face API for embeddings 
 print("🧠 Connecting to Hugging Face Embeddings...")
-embeddings = HuggingFaceEmbeddings(model_name="BAAI/bge-m3")
+embeddings = HuggingFaceEndpointEmbeddings(model="BAAI/bge-m3", huggingfacehub_api_token=os.getenv("HF_TOKEN"))
 
 """
 engine.init_vectorstore_table(

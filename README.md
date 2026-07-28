@@ -101,8 +101,11 @@ English Translation: Thanks to our commitment , we continue to set new standards
 | **Database** | Neon Serverless PostgreSQL (`pgvector`) | Vector store & thread checkpointer |
 | **Hosting** | Render (Backend), Streamlit Cloud (Frontend) | Production deployment |
 
+---
 
-## 📂 Repository structure
+## 📂 Project structure
+
+```text
 .
 ├── agent_core.py       # Core LangGraph state machine, nodes, and checkpointer logic
 ├── server.py           # FastAPI application exposing REST endpoints
@@ -112,6 +115,8 @@ English Translation: Thanks to our commitment , we continue to set new standards
 ├── ingest_idioms.py    # Batch ingestion script populating pgvector
 ├── requirements.txt    # Project dependencies
 └── README.md           # Documentation
+
+```
 
 ---
 
@@ -146,7 +151,7 @@ uvicorn server:app --host 0.0.0.0 --port 8000 --reload
 ```bash
 streamlit run frontend.py
 ```
-
+---
 
 ## 🗺️ Roadmap
 

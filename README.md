@@ -6,12 +6,12 @@ The system uses a **Semantic Router RAG** architecture, implemented as a Directe
 
 ---
 
-🌐 Live Demo & Instant Access
+## 🌐 Live Demo & Instant Access
 Spezi is fully deployed and publicly accessible online. You can interact with the live AI tutor immediately without any local installation by visiting the Streamlit Web Interface - https://spezi-ai-agent.streamlit.app/
 
-The application runs on a fully decoupled cloud architecture: the Streamlit frontend communicates directly over HTTPS with the containerized FastAPI backend hosted on Render, which handles session persistence via a serverless Neon PostgreSQL vector database.
+The application runs on a decoupled cloud architecture where the Streamlit frontend communicates directly over HTTPS with the containerized FastAPI backend hosted on Render, this handles session persistence via a serverless Neon PostgreSQL vector database.
 
-📌 Note on Performance: The backend is hosted on Render's free tier. If the application has been inactive for more than 15 minutes, the initial request may take 30–45 seconds to perform a cold boot. Subsequent responses will be immediate.
+Note on Performance: The backend is hosted on Render's free tier. If the application has been inactive for more than 15 minutes, the initial request may take 30–45 seconds to perform a cold boot. Subsequent responses will be immediate.
 
 ---
 
@@ -27,7 +27,7 @@ graph TD
         START --> Compactor[1. Compactor Node<br/>History Summarization & State Pruning]
         Compactor --> Decision[2. Decision Node<br/>Intent Routing & Tool Selection]
         
-        Decision -->|Tool Call Required| DBLookup[3. DB Lookup Node<br/>Hybrid RAG & State Hygiene]
+        Decision -->|Tool Call Required| DBLookup[3. DB Lookup Node<br/>Hybrid RAG]
         Decision -->|Direct Response| END([END])
         
         DBLookup --> Synthesis[4. Synthesis Node<br/>Contextual Response Generation]
@@ -87,6 +87,7 @@ English Translation: Thanks to our commitment , we continue to set new standards
 
 * **Frontend** *(frontend.py)***:** Lightweight Streamlit UI handling user sessions, chat rendering, and API communication.
 
+---
 
 ## 🛠️ Tech Stack
 
@@ -112,8 +113,11 @@ English Translation: Thanks to our commitment , we continue to set new standards
 ├── requirements.txt    # Project dependencies
 └── README.md           # Documentation
 
+---
 
 ## 🚀 Environment & Setup
+
+**For local deployment**
 
 * Create a .env file in the project root
 
@@ -121,15 +125,19 @@ English Translation: Thanks to our commitment , we continue to set new standards
 NEON_DB_URI=postgresql://user:password@ep-cool-endpoint.aws.neon.tech/neondb?sslmode=require
 GROQ_API_KEY=gsk_your_groq_api_key
 HF_TOKEN=hf_your_huggingface_access_token
-API_URL=from Router 
+
 ```
 
 * Clone the repo and setup requirements.txt
 
-* Injest knowledge base 
+* Injest knowledge base
+
+```bash
+python extractIdioms.py
+python ingest_idioms.py
+```
 
 * Launch FastAPI backend
-
 ```bash
 uvicorn server:app --host 0.0.0.0 --port 8000 --reload
 ```

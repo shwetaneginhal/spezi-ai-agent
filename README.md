@@ -1,17 +1,27 @@
 # Spezi: a friendly, local German language teaching AI Agent 
 
-The goal of Sepzi is to help an English speaker learn how to talk like a German local. Spezi is a containerized, cloud-native REST backend and interactive frontend for conversational German language learning. It is designed to imitate a 26-year-old local living in Berlin. 
-
-The system uses a **Semantic Router RAG** architecture, implemented as a Directed Acyclic Graph (DAG) in **LangGraph** to ensure deterministic execution and prevent runaway agentic loops. Spezi has a unified database (PostgreSQL + pgvector) with **persistence memory** (sliding-window compactor) for each user, allowing for long conversations that can be picked up at any time. 
+Spezi is an interactive AI language tutor designed to help users learn German idioms, local expressions and conversational nuance. Unlike standard AI chatbots that suffer from unpredictable behavior or "thinking" loops, Spezi is built on a **single-pass deterministic architecture**. It intelligently routes user requests, actively manages long-term conversation memory to prevent context bloat, and retrieves authentic German idioms from a hybrid database.
 
 ---
 
 ## 🌐 Live Demo & Instant Access
-Spezi is fully deployed and publicly accessible online. You can interact with the live AI tutor immediately without any local installation by visiting the Streamlit Web Interface - https://spezi-ai-agent.streamlit.app/
 
-The application runs on a decoupled cloud architecture where the Streamlit frontend communicates directly over HTTPS with the containerized FastAPI backend hosted on Render, this handles session persistence via a serverless Neon PostgreSQL vector database.
+* Interactive Frontend: Live Streamlit Web Application (No setup required)
+    Link: https://spezi-ai-agent.streamlit.app/
 
-Note on Performance: The backend is hosted on Render's free tier. If the application has been inactive for more than 15 minutes, the initial request may take 30–45 seconds to perform a cold boot. Subsequent responses will be immediate.
+* **Architecture Overview:** The application runs on a decoupled cloud infrastructure. The Streamlit frontend communicates directly via HTTPS with a containerized FastAPI backend hosted on Render. User session persistence and vector search are powered by a serverless Neon PostgreSQL database.
+
+Note on Free-Tier Hosting: The backend is hosted on Render's free tier. If the application has been inactive for more than 15 minutes, the initial request may take 30–45 seconds to perform a cold boot. Subsequent responses will be immediate.
+
+---
+
+## Project Evolution: From Version 1 (agent_v1) to Production Architecture
+
+The initial version of this project (agent_v1.py) was built on Llama 3.2 as a local, offline agent with **ReAct pattern** (cyclic, tool-binding loop `spezi` ↔ `tools`). While it returned results for queries, this early version had two major **limitations**: 
+1. **Unnecessary Database Calls:** It executed idioms database searches on every turn (even for general conversations like greetings).
+2. **Loop Risks & Memory Constraints:** The local LLM occasionally got stuck in repetitive thinking loops during tool selection, and local GPU memory constrained the model size.
+
+The architecture was completely redesigned into a **single-pass execution graph** driven by an explicit **Semantic Router node** and this solved the repetitive loop. As general queries were still hitting the database and because of the local GPU memory constraints, it was moved into an online agent with bigger Llama model - llama-3.3-70b (via Groq API). This ensured accurate intent classification and predicatble routing latency.
 
 ---
 
@@ -46,19 +56,19 @@ graph TD
 ## Key Engineering & Architectural Highlights
 
 
-### 1. Deterministic State Workflow (DAG)
+### 1. Deterministic State Workflow 
 Rather than relying on an unconstrained cyclic agent loop, the orchestrator executes a strict, multi-stage state graph (agent_core.py):
 
-* **Compactor Node:** Evaluates session memory before invocation. If conversation length exceeds thresholds, it progressively summarizes older turns into a concise SystemMessage summary and issues RemoveMessage commands to wipe obsolete rows from PostgreSQL.
+* **Compactor Node (Memory management):** Evaluates session memory before every turn. If the conversation gets too long, it progressively summarizes older messages and explicitly deletes obsolete rows from the PostgreSQL database to prevent context bloat.
 
-* **Decision Node:** Evaluates user intent using llama-3.3-70b-versatile with the database tool schema.
+* **Decision Node (Semantic Routing):** Evaluates user intent first. If the user just says "Hello," it skips the database entirely, saving compute time and API costs.
 
-* **DB Lookup Node:** When a tool call is generated, this node intercepts the invocation, executes a hybrid vector search against PostgreSQL, and immediately purges the raw JSON tool_calls message from history using RemoveMessage. This eliminates syntax artifacts.
+* **DB Lookup Node (State Hygiene):** When a tool call is generated, this node intercepts the invocation, executes a hybrid vector search against PostgreSQL, and immediately purges the raw JSON tool_calls message from history. This eliminates syntax artifacts.
 
-* **Synthesis Node:** Uses an un-tooled LLM instance to formulate natural conversational responses by combining user input with the cleanly injected rag_context (if invoked).
+* **Synthesis Node:** Uses an un-tooled LLM instance to formulate final natural conversational responses by combining user input with the cleanly injected rag_context (if invoked). 
 
-### 2.Hybrid RAG Pipeline (Semantic + Lexical)
-Knowledge retrieval relies on a dual-strategy lookup against a Neon PostgreSQL database using langchain_postgres:
+### 2.Hybrid RAG Pipeline (Semantic + Lexical Search)
+Knowledge retrieval relies on a dual-strategy lookup against a Neon PostgreSQL database:
 
 * **Dense Semantic Search (Vector Search):** Generates 1024-dimensional embeddings via Hugging Face’s Serverless API using BAAI/bge-m3.
 
@@ -94,12 +104,12 @@ English Translation: Thanks to our commitment , we continue to set new standards
 | Component | Tools | Purpose |
 | :--- | :--- | :--- |
 | **Language & Web** | Python 3.10+, FastAPI, Uvicorn | REST Backend Service |
-| **Frontend** | Streamlit | Web Interface |
+| **Frontend** | Streamlit | Web chat Interface |
 | **Agent Orchestration** | LangGraph, LangChain Core | State machine workflow and thread memory |
 | **LLM Inference** | Groq API (`llama-3.3-70b-versatile`) | Intent evaluation & text synthesis |
 | **Embeddings** | Hugging Face API (`BAAI/bge-m3`) | Serverless 1024-dim dense vector generation |
 | **Database** | Neon Serverless PostgreSQL (`pgvector`) | Vector store & thread checkpointer |
-| **Hosting** | Render (Backend), Streamlit Cloud (Frontend) | Production deployment |
+| **Hosting** | Render (Backend), Streamlit Cloud (Frontend) | Live production deployment |
 
 ---
 

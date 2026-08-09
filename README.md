@@ -53,6 +53,20 @@ graph TD
     end
 ```
 
+## 🛠️ Tech Stack
+
+| Component | Tools | Purpose |
+| :--- | :--- | :--- |
+| **Language & Web** | Python 3.10+, FastAPI, Uvicorn | REST Backend Service |
+| **Frontend** | Streamlit | Web chat Interface |
+| **Agent Orchestration** | LangGraph, LangChain Core | State machine workflow and thread memory |
+| **LLM Inference** | Groq API (`llama-3.3-70b-versatile`) | Intent evaluation & text synthesis |
+| **Embeddings** | Hugging Face API (`BAAI/bge-m3`) | Serverless 1024-dim dense vector generation |
+| **Database** | Neon Serverless PostgreSQL (`pgvector`) | Vector store & thread checkpointer |
+| **Hosting** | Render (Backend), Streamlit Cloud (Frontend) | Live Production deployment |
+
+---
+
 ## Key Engineering & Architectural Highlights
 
 
@@ -96,20 +110,6 @@ English Translation: Thanks to our commitment , we continue to set new standards
 * **Backend** *(server.py)***:** Built with FastAPI and Uvicorn, serving asynchronous */chat* and */health* REST endpoints.
 
 * **Frontend** *(frontend.py)***:** Lightweight Streamlit UI handling user sessions, chat rendering, and API communication.
-
----
-
-## 🛠️ Tech Stack
-
-| Component | Tools | Purpose |
-| :--- | :--- | :--- |
-| **Language & Web** | Python 3.10+, FastAPI, Uvicorn | REST Backend Service |
-| **Frontend** | Streamlit | Web chat Interface |
-| **Agent Orchestration** | LangGraph, LangChain Core | State machine workflow and thread memory |
-| **LLM Inference** | Groq API (`llama-3.3-70b-versatile`) | Intent evaluation & text synthesis |
-| **Embeddings** | Hugging Face API (`BAAI/bge-m3`) | Serverless 1024-dim dense vector generation |
-| **Database** | Neon Serverless PostgreSQL (`pgvector`) | Vector store & thread checkpointer |
-| **Hosting** | Render (Backend), Streamlit Cloud (Frontend) | Live production deployment |
 
 ---
 
@@ -174,14 +174,4 @@ streamlit run frontend.py
 - [x] Live Hosting 
 - [ ] **[Upcoming]** RAG Evaluation - implement LangSmith
 - [ ] **[Upcoming]** Address feedback and refine
-
-
-
-
-
-
-
-
-
-
 

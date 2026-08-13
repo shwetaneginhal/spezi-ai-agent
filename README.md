@@ -28,30 +28,38 @@ The architecture was completely redesigned into a **single-pass execution graph*
 ## 🏗️ Architecture Diagram
 
 ```mermaid
+%%{init: {'theme': 'base', 'themeVariables': { 'lineColor': '#555'}}}%%
 graph TD
-    User([User Browser]) <-->|HTTPS| Frontend[Streamlit Frontend<br/>Streamlit Community Cloud]
-    Frontend <-->|HTTP POST /chat| Backend[FastAPI Microservice<br/>Hosted on Render]
+    %% Define Color Classes
+    classDef client fill:#e0f7fa,stroke:#006064,stroke-width:2px,color:#000;
+    classDef server fill:#b3e5fc,stroke:#01579b,stroke-width:2px,color:#000;
+    classDef graphNode fill:#e1bee7,stroke:#4a148c,stroke-width:2px,color:#000;
+    classDef startEnd fill:#c8e6c9,stroke:#1b5e20,stroke-width:2px,color:#000;
+    classDef externalAPI fill:#fff9c4,stroke:#f57f17,stroke-width:2px,color:#000;
+    classDef database fill:#ffe0b2,stroke:#e65100,stroke-width:2px,color:#000;
+
+    User([User Browser]):::client <-->|HTTPS| Frontend[Streamlit Frontend<br/>Streamlit Community Cloud]:::client
+    Frontend <-->|HTTP POST /chat| Backend[FastAPI Microservice<br/>Hosted on Render]:::server
 
     subgraph LangGraph Execution Engine
-        Backend --> START([START])
-        START --> Compactor[1. Compactor Node<br/>History Summarization & State Pruning]
-        Compactor --> Decision[2. Decision Node<br/>Intent Routing & Tool Selection]
+        Backend --> START([START]):::startEnd
+        START --> Compactor[1. Compactor Node<br/>History Summarization & State Pruning]:::graphNode
+        Compactor --> Decision[2. Decision Node<br/>Intent Routing & Tool Selection]:::graphNode
         
-        Decision -->|Tool Call Required| DBLookup[3. DB Lookup Node<br/>Hybrid RAG]
-        Decision -->|Direct Response| END([END])
+        Decision -->|Tool Call Required| DBLookup[3. DB Lookup Node<br/>Hybrid RAG]:::graphNode
+        Decision -->|Direct Response| END([END]):::startEnd
         
-        DBLookup --> Synthesis[4. Synthesis Node<br/>Contextual Response Generation]
+        DBLookup --> Synthesis[4. Synthesis Node<br/>Contextual Response Generation]:::graphNode
         Synthesis --> END
     end
 
     subgraph External Infrastructure & APIs
-        Decision <-->|LLM Inference| Groq[Groq Cloud API<br/>llama-3.3-70b-versatile]
+        Decision <-->|LLM Inference| Groq[Groq Cloud API<br/>llama-3.3-70b-versatile]:::externalAPI
         Synthesis <-->|LLM Inference| Groq
-        DBLookup <-->|Vector Embeddings| HF[Hugging Face Serverless API<br/>BAAI/bge-m3]
-        DBLookup <-->|Hybrid Search| NeonDB[(Neon Serverless PostgreSQL<br/>pgvector + Full-Text Search)]
+        DBLookup <-->|Vector Embeddings| HF[Hugging Face Serverless API<br/>BAAI/bge-m3]:::externalAPI
+        DBLookup <-->|Hybrid Search| NeonDB[(Neon Serverless PostgreSQL<br/>pgvector + Full-Text Search)]:::database
         Compactor <-->|Thread Checkpoints| NeonDB
     end
-```
 
 ## 🛠️ Tech Stack
 

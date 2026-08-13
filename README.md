@@ -60,6 +60,7 @@ graph TD
         DBLookup <-->|Hybrid Search| NeonDB[(Neon Serverless PostgreSQL<br/>pgvector + Full-Text Search)]:::database
         Compactor <-->|Thread Checkpoints| NeonDB
     end
+```
 
 ## 🛠️ Tech Stack
 

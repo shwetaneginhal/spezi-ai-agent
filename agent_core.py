@@ -89,7 +89,7 @@ def search_german_idioms(query: str) -> str:
 # Instance A: Clean model without tools attached
 print("🚀 Connecting to Groq Cloud LLM...")
 llm_no_tool = ChatGroq(
-    model="llama-3.3-70b-versatile", # for multilingual and sending syntax correct prompt for tool calling
+    model="openai/gpt-oss-120b", # for multilingual and sending syntax correct prompt for tool calling
     temperature=0.3,
 )
 

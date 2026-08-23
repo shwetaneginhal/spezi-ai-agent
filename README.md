@@ -21,7 +21,7 @@ The initial version of this project (agent_v1.py) was built on Llama 3.2 as a lo
 1. **Unnecessary Database Calls:** It executed idioms database searches on every turn (even for general conversations like greetings).
 2. **Loop Risks & Memory Constraints:** The local LLM occasionally got stuck in repetitive thinking loops during tool selection, and local GPU memory constrained the model size.
 
-The architecture was completely redesigned into a **single-pass execution graph** driven by an explicit **Semantic Router node** and this solved the repetitive loop. As general queries were still hitting the database and because of the local GPU memory constraints, it was moved into an online agent with bigger Llama model - llama-3.3-70b (via Groq API). This ensured accurate intent classification and predicatble routing latency.
+The architecture was completely redesigned into a **single-pass execution graph** driven by an explicit **Semantic Router node** and this solved the repetitive loop. As general queries were still hitting the database and because of the local GPU memory constraints, it was moved into an online agent with OpenAI model (via Groq API). This ensured accurate intent classification and predicatble routing latency.
 
 ---
 
@@ -54,7 +54,7 @@ graph TD
     end
 
     subgraph External Infrastructure & APIs
-        Decision <-->|LLM Inference| Groq[Groq Cloud API<br/>llama-3.3-70b-versatile]:::externalAPI
+        Decision <-->|LLM Inference| Groq[Groq Cloud API<br/>]:::externalAPI
         Synthesis <-->|LLM Inference| Groq
         DBLookup <-->|Vector Embeddings| HF[Hugging Face Serverless API<br/>BAAI/bge-m3]:::externalAPI
         DBLookup <-->|Hybrid Search| NeonDB[(Neon Serverless PostgreSQL<br/>pgvector + Full-Text Search)]:::database
@@ -69,7 +69,7 @@ graph TD
 | **Language & Web** | Python 3.10+, FastAPI, Uvicorn | REST Backend Service |
 | **Frontend** | Streamlit | Web chat Interface |
 | **Agent Orchestration** | LangGraph, LangChain Core | State machine workflow and thread memory |
-| **LLM Inference** | Groq API (`llama-3.3-70b-versatile`) | Intent evaluation & text synthesis |
+| **LLM Inference** | Groq API | Intent evaluation & text synthesis |
 | **Embeddings** | Hugging Face API (`BAAI/bge-m3`) | Serverless 1024-dim dense vector generation |
 | **Database** | Neon Serverless PostgreSQL (`pgvector`) | Vector store & thread checkpointer |
 | **Hosting** | Render (Backend), Streamlit Cloud (Frontend) | Live Production deployment |

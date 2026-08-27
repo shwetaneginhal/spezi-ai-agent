@@ -252,8 +252,8 @@ with pool.connection() as conn:
     checkpointer.setup()
     """
 
-checkpointer_conn = psycopg.connect(DB_POOL_URI, autocommit=True, row_factory=dict_row)
-checkpointer = PostgresSaver(checkpointer_conn)
+#checkpointer_conn = psycopg.connect(DB_POOL_URI, autocommit=True, row_factory=dict_row)
+checkpointer = PostgresSaver(pool)
 checkpointer.setup()
 
 spezi_app = workflow.compile(checkpointer=checkpointer)

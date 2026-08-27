@@ -181,6 +181,7 @@ streamlit run frontend.py
 - [x] Deployment (FastAPI and Streamlit)
 - [x] Initial evaluation and testing
 - [x] Live Hosting 
+- [x] Bug fixes after deployment 
 - [ ] **[Upcoming]** RAG Evaluation - implement LangSmith
-- [ ] **[Upcoming]** Address feedback and refine
+
 

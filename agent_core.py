@@ -1,6 +1,7 @@
 import os
 from dotenv import load_dotenv
 load_dotenv()
+import uuid
 
 import psycopg
 from psycopg.rows import dict_row
@@ -93,10 +94,8 @@ llm_no_tool = ChatGroq(
     temperature=0.3,
 )
 
-llm_with_tool = llm_no_tool.bind_tools([search_german_idioms])
-
 # Instance B: Decision model with tools bound
-llm_with_tool = llm_no_tool.bind_tools([search_german_idioms])
+llm_with_tool = llm_no_tool.bind_tools([search_german_idioms], tool_choice="auto")
 
 
 #Node FUNCTIONS
@@ -149,7 +148,11 @@ def decision_node(state: AgentState):
         MessagesPlaceholder(variable_name="messages"),
     ])
     filled_prompt = prompt.invoke({"messages": state["messages"]})
-    response = llm_with_tool.invoke(filled_prompt)
+    response = llm_with_tool.invoke(filled_prompt, tool_choice="auto")
+
+    # Fix1:  Guarantee the message has an ID so it can be deleted later
+    if not getattr(response, "id", None):
+        response.id = str(uuid.uuid4())
     return {"messages": [response]}
 
 
@@ -168,10 +171,13 @@ def db_lookup_node(state: AgentState):
         context_str = "No matching idiom found in database. Answer using general knowledge."
     else:
         context_str = "\n---\n".join([doc.page_content for doc in retrieved_docs])
+
+    # Safe removal check
+    removal = [RemoveMessage(id=last_msg.id)] if getattr(last_msg, "id", None) else []
         
     # Purge the tool_call AIMessage to prevent raw syntax pollution in PostgreSQL state
     return {
-        "messages": [RemoveMessage(id=last_msg.id)], 
+        "messages": removal, 
         "rag_context": context_str
     }
 
@@ -183,18 +189,25 @@ def synthesis_node(state: AgentState):
     if rag_context:
         dynamic_system = (
             f"{SPEZI_SYSTEM_PROMPT}\n\n"
-            f"[DATABASE KNOWLEDGE RETRIEVED]:\n{rag_context}\n"
-            f"INSTRUCTION: Use the retrieved database knowledge above to answer the user's question accurately."
+            f"### SYSTEM ALERT: DATABASE SEARCH COMPLETE ###\n"
+            f"A background search has ALREADY been executed for the user's latest question.\n"
+            f"RESULTS FOUND:\n{rag_context}\n"
+            f"##############################################\n\n"
+            f"CRITICAL INSTRUCTION: You MUST NOT output JSON, and you MUST NOT attempt to call any tools or search functions. "
+            f"Your only job is to read the results above and answer the user directly in natural language."
         )
     else:
         dynamic_system = SPEZI_SYSTEM_PROMPT
+
+    # FIX2: Failsafe to strip out orphaned tool calls before hitting the clean LLM
+    clean_messages = [msg for msg in state["messages"] if not getattr(msg, "tool_calls", None)]
         
     prompt = ChatPromptTemplate.from_messages([
         ("system", dynamic_system),
         MessagesPlaceholder(variable_name="messages"),
     ])
     
-    filled_prompt = prompt.invoke({"messages": state["messages"]})
+    filled_prompt = prompt.invoke({"messages": clean_messages})
     
     # Executed via llm_no_tool: direct answer output
     response = llm_no_tool.invoke(filled_prompt)

@@ -38,8 +38,17 @@ DB_POOL_URI = NEON_URI
 
 pool = ConnectionPool(
     conninfo=DB_POOL_URI, 
-    max_size=10,
-    kwargs={"autocommit": True, "row_factory": dict_row} 
+    min_size=1,
+    max_size=5,
+    kwargs={
+        "autocommit": True, 
+        "row_factory": dict_row,
+        # Tells psycopg to send keepalive packets so the cloud host doesn't drop idle sockets as quickly
+        "keepalives": 1,
+        "keepalives_idle": 30,
+        "keepalives_interval": 10,
+        "keepalives_count": 5,
+    } 
 )
 
 #print("🧠 Connecting Spezi to the Hybrid Vector Knowledge Base...")
